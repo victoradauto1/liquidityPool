@@ -14,6 +14,8 @@ contract LiquidityPool is ERC20, ReentrancyGuard {
     uint public reserve0; //balance token0
     uint public reserve1; //balance token1
 
+    uint public fee = 30;//0.30%
+
     constructor(address _token0, address _token1) ERC20("LP Token", "LPT") {
         token0 = IERC20(_token0);
         token1 = IERC20(_token1);
@@ -77,5 +79,30 @@ contract LiquidityPool is ERC20, ReentrancyGuard {
 
         token0.transfer(msg.sender, amount0);
         token0.transfer(msg.sender, amount1);
+    }
+
+    function swap(address _tokenIn, uint _amountIn) external returns(uint amountOut){
+        require(_tokenIn == address(token0) || _tokenIn == address(token1), "invalid token");
+        require(_amountIn > 0, "invalid Amount");
+
+        bool isToken0 = _tokenIn == address(token0);
+        (
+            IERC20 tokenIn, 
+            IERC20 tokenOut, 
+            uint256 reserveIn, 
+            uint256 reserveOut) = 
+            isToken0
+            ? (token1, token0, reserve1, reserve0)
+            : (token0, token1, reserve0, reserve1);
+        
+        tokenIn.transferFrom(msg.sender, address(this), _amountIn);
+
+        uint amountWithFee = ( _amountIn * (10000 - fee)) / 10000;
+        
+        amountOut = (reserveOut * amountWithFee) / (reserveIn * amountWithFee);
+
+        tokenOut.transfer(msg.sender, amountOut);
+        _update(token0.balanceOf(address(this)), token1.balanceOf(address(this)));
+
     }
 }
