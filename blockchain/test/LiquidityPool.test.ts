@@ -52,5 +52,33 @@ describe("Liquidity Pool", function () {
       expect(await liquidityPool.reserve0()).to.equal(amount0);
       expect(await liquidityPool.reserve1()).to.equal(amount1);
     });
+
+    it("Should not allow deposit (different proportion of peers)", async function () {
+      const { liquidityPool, token0, token1, owner } = await loadFixture(deployLiquidityPoolFixture);
+      
+      const amount0 = hre.ethers.parseEther("100");
+      const amount1 = hre.ethers.parseEther("100");
+      
+      await token0.approve(await liquidityPool.getAddress(), amount0);
+      await token1.approve(await liquidityPool.getAddress(), amount1);
+
+      await liquidityPool.deposit(amount0, amount1);
+
+      const amount3 = hre.ethers.parseEther("100");
+      const amount4 = hre.ethers.parseEther("80");
+
+      await token0.approve(await liquidityPool.getAddress(), amount3);
+      await token1.approve(await liquidityPool.getAddress(), amount4);
+
+      await expect( liquidityPool.deposit(amount3, amount4)).to.be.revertedWith("x/y != dx/dy");
+      
+    });
+  });
+
+  describe("Withdraw", function () {
+    // it("Should allow deposit when liquidity pool is empty", async function () {
+    //   const { liquidityPool, token0, token1, owner } = await loadFixture(deployLiquidityPoolFixture);
+      
+    // });
   });
 });

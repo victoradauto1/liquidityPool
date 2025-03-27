@@ -26,6 +26,7 @@ contract LiquidityPool is ERC20, ReentrancyGuard {
         reserve1 = _reserve1;
     }
 
+    // returns the square root of a number
     function sqrt(uint y) internal pure returns (uint z) {
         if (y > 3) {
             z = y;
