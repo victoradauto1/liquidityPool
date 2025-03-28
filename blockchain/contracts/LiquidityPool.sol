@@ -48,7 +48,7 @@ contract LiquidityPool is ERC20, ReentrancyGuard {
         uint _amount0,
         uint _amount1
     ) external nonReentrant returns (uint shares) {
-        if (reserve0 > 0 || reserve1 > 0) {
+        if (reserve0 > 0) {
             require(reserve0 * _amount1 == reserve1 * _amount0, "x/y != dx/dy"); //x/y == dx/dy;
         }
 
