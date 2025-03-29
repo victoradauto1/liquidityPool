@@ -26,6 +26,20 @@ describe("Liquidity Pool", function () {
     return { liquidityPool, token0, token1, owner, otherAccount };
   }
 
+  async function createLiquidity(){
+    const { liquidityPool, token0, token1, owner } = await loadFixture(
+      deployLiquidityPoolFixture
+    );
+
+    const amount0 = hre.ethers.parseEther("100");
+    const amount1 = hre.ethers.parseEther("100");
+
+    await token0.approve(await liquidityPool.getAddress(), amount0);
+    await token1.approve(await liquidityPool.getAddress(), amount1);
+
+    liquidityPool.deposit(amount0, amount1)
+  }
+
   describe("Deployment", function () {
     it("Should deploy correctly", async function () {
       const { liquidityPool, token0, token1 } = await loadFixture(
