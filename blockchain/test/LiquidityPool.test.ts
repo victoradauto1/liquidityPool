@@ -131,6 +131,38 @@ describe("Liquidity Pool", function () {
         .to.emit(liquidityPool, "Transfer")
         .withArgs(hre.ethers.ZeroAddress, owner.address, hre.ethers.parseEther("100"));
     });
+
+    it("Should revert when deposit would result in zero shares", async function () {
+      const { liquidityPool, token0, token1, owner } = await loadFixture(
+        deployLiquidityPoolFixture
+      );
+    
+      // scenarios for trying deposit with zero shares
+      const testScenarios = [
+        { 
+          amount0: 1n,  // Minimum possible value
+          amount1: 0n,  // Zero tokens
+          expectedReason: "Insufficient liquidity"
+        },
+        { 
+          amount0: 0n,  // Zero tokens
+          amount1: 1n,  // Minimum possible value
+          expectedReason: "Insufficient liquidity"
+        }
+      ];
+    
+      for (const scenario of testScenarios) {
+      
+        await token0.approve(await liquidityPool.getAddress(), scenario.amount0);
+        await token1.approve(await liquidityPool.getAddress(), scenario.amount1);
+    
+
+        //Try to deposit and wait for it be reverted
+        await expect(
+          liquidityPool.deposit(scenario.amount0, scenario.amount1)
+        ).to.be.revertedWith(scenario.expectedReason);
+      }
+    });
     
   });
 

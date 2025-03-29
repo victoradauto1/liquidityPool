@@ -14,7 +14,7 @@ contract LiquidityPool is ERC20, ReentrancyGuard {
     uint public reserve0; //balance token0
     uint public reserve1; //balance token1
 
-    uint public fee = 30;//0.30%
+    uint public fee = 30; //0.30%
 
     constructor(address _token0, address _token1) ERC20("LP Token", "LPT") {
         token0 = IERC20(_token0);
@@ -40,8 +40,8 @@ contract LiquidityPool is ERC20, ReentrancyGuard {
         }
     }
 
-    function _min(uint x, uint y) internal pure returns(uint){
-        return x >= y? x : y;
+    function _min(uint x, uint y) internal pure returns (uint) {
+        return x >= y ? x : y;
     }
 
     function deposit(
@@ -56,17 +56,25 @@ contract LiquidityPool is ERC20, ReentrancyGuard {
         token1.transferFrom(msg.sender, address(this), _amount1);
 
         uint totalSupply = totalSupply();
-        if(totalSupply == 0){
+
+        if (totalSupply == 0) {
+            //First liquidity: square root of the product
             shares = sqrt(_amount0 * _amount1);
-        }else{
-            shares = _min((_amount0 * _amount1) / reserve0, (_amount0 * _amount1) / reserve1); 
+        } else {
+            // Proportional calculation based on minimum between tokens
+            shares =
+                (totalSupply * _min(_amount0 * reserve1, _amount1 * reserve0)) /
+                (reserve0 * reserve1);
         }
-        require(shares > 0, "shares = 0");
+
+        require(shares > 0, "Insufficient liquidity");
         _mint(msg.sender, shares);
         _update(reserve0 + _amount0, reserve1 + _amount1);
     }
 
-    function withdraw(uint _shares) external nonReentrant returns(uint amount0, uint amount1){
+    function withdraw(
+        uint _shares
+    ) external nonReentrant returns (uint amount0, uint amount1) {
         uint bal0 = token0.balanceOf(address(this));
         uint bal1 = token1.balanceOf(address(this));
 
@@ -76,34 +84,42 @@ contract LiquidityPool is ERC20, ReentrancyGuard {
 
         require(amount0 > 0 && amount1 > 0, "amount0 or amount1 == 0");
         _burn(msg.sender, _shares);
-        _update(bal0 -amount0, bal1 - amount1);
+        _update(bal0 - amount0, bal1 - amount1);
 
         token0.transfer(msg.sender, amount0);
         token0.transfer(msg.sender, amount1);
     }
 
-    function swap(address _tokenIn, uint _amountIn) external returns(uint amountOut){
-        require(_tokenIn == address(token0) || _tokenIn == address(token1), "invalid token");
+    function swap(
+        address _tokenIn,
+        uint _amountIn
+    ) external returns (uint amountOut) {
+        require(
+            _tokenIn == address(token0) || _tokenIn == address(token1),
+            "invalid token"
+        );
         require(_amountIn > 0, "invalid Amount");
 
         bool isToken0 = _tokenIn == address(token0);
         (
-            IERC20 tokenIn, 
-            IERC20 tokenOut, 
-            uint256 reserveIn, 
-            uint256 reserveOut) = 
-            isToken0
-            ? (token1, token0, reserve1, reserve0)
-            : (token0, token1, reserve0, reserve1);
-        
+            IERC20 tokenIn,
+            IERC20 tokenOut,
+            uint256 reserveIn,
+            uint256 reserveOut
+        ) = isToken0
+                ? (token1, token0, reserve1, reserve0)
+                : (token0, token1, reserve0, reserve1);
+
         tokenIn.transferFrom(msg.sender, address(this), _amountIn);
 
-        uint amountWithFee = ( _amountIn * (10000 - fee)) / 10000;
-        
+        uint amountWithFee = (_amountIn * (10000 - fee)) / 10000;
+
         amountOut = (reserveOut * amountWithFee) / (reserveIn * amountWithFee);
 
         tokenOut.transfer(msg.sender, amountOut);
-        _update(token0.balanceOf(address(this)), token1.balanceOf(address(this)));
-
+        _update(
+            token0.balanceOf(address(this)),
+            token1.balanceOf(address(this))
+        );
     }
 }
