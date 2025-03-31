@@ -87,7 +87,7 @@ contract LiquidityPool is ERC20, ReentrancyGuard {
         _update(bal0 - amount0, bal1 - amount1);
 
         token0.transfer(msg.sender, amount0);
-        token0.transfer(msg.sender, amount1);
+        token1.transfer(msg.sender, amount1);
     }
 
     function swap(

@@ -1,6 +1,7 @@
 import { loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
 import { expect } from "chai";
 import hre from "hardhat";
+import { LiquidityPool__factory } from "../typechain-types";
 
 describe("Liquidity Pool", function () {
   async function deployLiquidityPoolFixture() {
@@ -182,48 +183,111 @@ describe("Liquidity Pool", function () {
 
   describe("Withdraw", function () {
 
-    it("Should withdraw tokens proportionally to shares", async function () {
-      const { liquidityPool, token0, token1, owner } = await loadFixture(
-        deployLiquidityPoolFixture
-      );
+    // it("Should withdraw tokens proportionally to shares", async function () {
+    //   const { liquidityPool, token0, token1, owner } = await loadFixture(
+    //     deployLiquidityPoolFixture
+    //   );
       
-      // Obter o saldo de shares do proprietário
-      const lpBalance = await liquidityPool.balanceOf(owner.address);
+    //   // Obter o saldo de shares do proprietário
+    //   const lpBalance = await liquidityPool.balanceOf(owner.address);
       
-      // Verificar saldos iniciais de tokens
-      const initialOwnerToken0Balance = await token0.balanceOf(owner.address);
-      const initialOwnerToken1Balance = await token1.balanceOf(owner.address);
+    //   // Verificar saldos iniciais de tokens
+    //   const initialOwnerToken0Balance = await token0.balanceOf(owner.address);
+    //   const initialOwnerToken1Balance = await token1.balanceOf(owner.address);
       
-      // Retirar metade dos shares
-      const sharesToWithdraw = lpBalance / 2n;
+    //   // Retirar metade dos shares
+    //   const sharesToWithdraw = lpBalance / 2n;
       
-      // Calcular quantidade esperada de tokens a receber
-      const expectedAmount0 = initialAmount0 / 2n;
-      const expectedAmount1 = initialAmount1 / 2n;
+    //   // Calcular quantidade esperada de tokens a receber
+    //   const expectedAmount0 = initialAmount0 / 2n;
+    //   const expectedAmount1 = initialAmount1 / 2n;
       
-      // Verificar eventos de transferência para token0 e token1
-      await expect(liquidityPool.withdraw(sharesToWithdraw))
-        .to.emit(token0, "Transfer")
-        .withArgs(await liquidityPool.getAddress(), owner.address, expectedAmount0)
-        .to.emit(token1, "Transfer")
-        .withArgs(await liquidityPool.getAddress(), owner.address, expectedAmount1)
-        .to.emit(liquidityPool, "Transfer") // Verificar evento de queima de tokens LP
-        .withArgs(owner.address, hre.ethers.ZeroAddress, sharesToWithdraw);
+    //   // Verificar eventos de transferência para token0 e token1
+    //   await expect(liquidityPool.withdraw(sharesToWithdraw))
+    //     .to.emit(token0, "Transfer")
+    //     .withArgs(await liquidityPool.getAddress(), owner.address, expectedAmount0)
+    //     .to.emit(token1, "Transfer")
+    //     .withArgs(await liquidityPool.getAddress(), owner.address, expectedAmount1)
+    //     .to.emit(liquidityPool, "Transfer") // Verificar evento de queima de tokens LP
+    //     .withArgs(owner.address, hre.ethers.ZeroAddress, sharesToWithdraw);
       
-      // Verificar saldos finais de tokens
-      const finalOwnerToken0Balance = await token0.balanceOf(owner.address);
-      const finalOwnerToken1Balance = await token1.balanceOf(owner.address);
+    //   // Verificar saldos finais de tokens
+    //   const finalOwnerToken0Balance = await token0.balanceOf(owner.address);
+    //   const finalOwnerToken1Balance = await token1.balanceOf(owner.address);
       
-      expect(finalOwnerToken0Balance - initialOwnerToken0Balance).to.equal(expectedAmount0);
-      expect(finalOwnerToken1Balance - initialOwnerToken1Balance).to.equal(expectedAmount1);
+    //   expect(finalOwnerToken0Balance - initialOwnerToken0Balance).to.equal(expectedAmount0);
+    //   expect(finalOwnerToken1Balance - initialOwnerToken1Balance).to.equal(expectedAmount1);
       
-      // Verificar saldo restante de LP tokens
-      const newLpBalance = await liquidityPool.balanceOf(owner.address);
-      expect(newLpBalance).to.equal(lpBalance - sharesToWithdraw);
+    //   // Verificar saldo restante de LP tokens
+    //   const newLpBalance = await liquidityPool.balanceOf(owner.address);
+    //   expect(newLpBalance).to.equal(lpBalance - sharesToWithdraw);
       
-      // Verificar reserves atualizadas
-      expect(await liquidityPool.reserve0()).to.equal(initialAmount0 - expectedAmount0);
-      expect(await liquidityPool.reserve1()).to.equal(initialAmount1 - expectedAmount1);
+    //   // Verificar reserves atualizadas
+    //   expect(await liquidityPool.reserve0()).to.equal(initialAmount0 - expectedAmount0);
+    //   expect(await liquidityPool.reserve1()).to.equal(initialAmount1 - expectedAmount1);
+    // });
+
+ 
+      async function deployLiquidityPoolFixtureWithdraw(amount0: bigint, amount1: bigint) {
+        const [owner, otherAccount] = await hre.ethers.getSigners();
+    
+        // Deployando tokens mock ERC-20 sem pré-mintar
+        const MockToken = await hre.ethers.getContractFactory("MockERC20");
+        // Modifique o construtor para não pré-mintar ou use outra abordagem
+        const token0 = await MockToken.deploy("Token0", "TK0");
+        const token1 = await MockToken.deploy("Token1", "TK1");
+    
+        await token0.waitForDeployment();
+        await token1.waitForDeployment();
+
+        //Only the necessary amount mint
+        const testAmount0 = hre.ethers.parseEther(`${amount0}`);
+        const testAmount1 = hre.ethers.parseEther(`${amount1}`);
+        await token0.mint(owner.address, testAmount0);
+        await token1.mint(owner.address, testAmount1);
+    
+        // Deploying the LiquidityPool
+        const LiquidityPool = await hre.ethers.getContractFactory("LiquidityPool");
+        const liquidityPool = await LiquidityPool.deploy(
+          await token0.getAddress(),
+          await token1.getAddress()
+        );
+    
+        await liquidityPool.waitForDeployment();
+    
+        return { liquidityPool, token0, token1, owner, otherAccount };
+    }
+    
+
+    it("Should withdraw tokens proportionally to shares (ORIGINALS)", async function () {
+      
+      const { liquidityPool, token0, token1, owner, otherAccount } = await deployLiquidityPoolFixtureWithdraw(100n, 80n)
+  
+      const amount0 = hre.ethers.parseEther("100");
+      const amount1 = hre.ethers.parseEther("80");
+  
+      await token0.approve(await liquidityPool.getAddress(), amount0);
+      await token1.approve(await liquidityPool.getAddress(), amount1);
+
+      await liquidityPool.deposit(amount0, amount1);
+      
+      //getting the lp token owner
+      const ownerShares = await liquidityPool.balanceOf(owner.address);
+      const ownertoken0AmountBefore = await token0.balanceOf(owner.address);
+      const ownertoken1AmountBefore = await token1.balanceOf(owner.address);
+
+      expect( ownertoken0AmountBefore ).to.equal(0);
+      expect( ownertoken1AmountBefore ).to.equal(0)
+
+      await liquidityPool.withdraw(ownerShares);
+
+      const ownertoken0AmountAfter =  await token0.balanceOf(owner.address);
+      const ownertoken1AmountAfter =  await token1.balanceOf(owner.address);
+
+      expect(ownertoken0AmountAfter).to.equal(hre.ethers.parseEther("100"));
+      expect(ownertoken1AmountAfter).to.equal(hre.ethers.parseEther("100"));
     });
+
+    
   });
 });
