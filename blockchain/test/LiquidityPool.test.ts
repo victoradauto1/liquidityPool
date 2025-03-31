@@ -181,8 +181,49 @@ describe("Liquidity Pool", function () {
   });
 
   describe("Withdraw", function () {
-    // it("Should allow deposit when liquidity pool is empty", async function () {
-    //   const { liquidityPool, token0, token1, owner } = await loadFixture(deployLiquidityPoolFixture);
-    // });
+
+    it("Should withdraw tokens proportionally to shares", async function () {
+      const { liquidityPool, token0, token1, owner } = await loadFixture(
+        deployLiquidityPoolFixture
+      );
+      
+      // Obter o saldo de shares do proprietário
+      const lpBalance = await liquidityPool.balanceOf(owner.address);
+      
+      // Verificar saldos iniciais de tokens
+      const initialOwnerToken0Balance = await token0.balanceOf(owner.address);
+      const initialOwnerToken1Balance = await token1.balanceOf(owner.address);
+      
+      // Retirar metade dos shares
+      const sharesToWithdraw = lpBalance / 2n;
+      
+      // Calcular quantidade esperada de tokens a receber
+      const expectedAmount0 = initialAmount0 / 2n;
+      const expectedAmount1 = initialAmount1 / 2n;
+      
+      // Verificar eventos de transferência para token0 e token1
+      await expect(liquidityPool.withdraw(sharesToWithdraw))
+        .to.emit(token0, "Transfer")
+        .withArgs(await liquidityPool.getAddress(), owner.address, expectedAmount0)
+        .to.emit(token1, "Transfer")
+        .withArgs(await liquidityPool.getAddress(), owner.address, expectedAmount1)
+        .to.emit(liquidityPool, "Transfer") // Verificar evento de queima de tokens LP
+        .withArgs(owner.address, hre.ethers.ZeroAddress, sharesToWithdraw);
+      
+      // Verificar saldos finais de tokens
+      const finalOwnerToken0Balance = await token0.balanceOf(owner.address);
+      const finalOwnerToken1Balance = await token1.balanceOf(owner.address);
+      
+      expect(finalOwnerToken0Balance - initialOwnerToken0Balance).to.equal(expectedAmount0);
+      expect(finalOwnerToken1Balance - initialOwnerToken1Balance).to.equal(expectedAmount1);
+      
+      // Verificar saldo restante de LP tokens
+      const newLpBalance = await liquidityPool.balanceOf(owner.address);
+      expect(newLpBalance).to.equal(lpBalance - sharesToWithdraw);
+      
+      // Verificar reserves atualizadas
+      expect(await liquidityPool.reserve0()).to.equal(initialAmount0 - expectedAmount0);
+      expect(await liquidityPool.reserve1()).to.equal(initialAmount1 - expectedAmount1);
+    });
   });
 });
