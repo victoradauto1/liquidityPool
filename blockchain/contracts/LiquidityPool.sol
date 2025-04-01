@@ -82,6 +82,10 @@ contract LiquidityPool is ERC20, ReentrancyGuard {
         amount0 = (_shares * bal0) / totalSupply;
         amount1 = (_shares * bal1) / totalSupply;
 
+        // SECURITY: This requires prior redemptions that would result in zero tokens,
+        // which could occur in extreme cases of integer division in Solidity.
+        // This condition is considered difficult to test in a test environment,
+        // but is kept as a protection against edge-case scenarios.
         require(amount0 > 0 && amount1 > 0, "amount0 or amount1 == 0");
         _burn(msg.sender, _shares);
         _update(bal0 - amount0, bal1 - amount1);
