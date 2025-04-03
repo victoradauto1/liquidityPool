@@ -94,10 +94,11 @@ contract LiquidityPool is ERC20, ReentrancyGuard {
         token1.transfer(msg.sender, amount1);
     }
 
+    
     function swap(
         address _tokenIn,
         uint _amountIn
-    ) external returns (uint amountOut) {
+    ) external nonReentrant returns (uint amountOut) {
         require(
             _tokenIn == address(token0) || _tokenIn == address(token1),
             "invalid token"
@@ -111,16 +112,26 @@ contract LiquidityPool is ERC20, ReentrancyGuard {
             uint256 reserveIn,
             uint256 reserveOut
         ) = isToken0
-                ? (token1, token0, reserve1, reserve0)
-                : (token0, token1, reserve0, reserve1);
+                ? (token0, token1, reserve0, reserve1)  
+                : (token1, token0, reserve1, reserve0);
 
+        // To tranfer tokens to contract user
         tokenIn.transferFrom(msg.sender, address(this), _amountIn);
 
-        uint amountWithFee = (_amountIn * (10000 - fee)) / 10000;
+        // Calc the fee (0.3%)
+        uint amountInWithFee = (_amountIn * (10000 - fee)) / 10000;
 
-        amountOut = (reserveOut * amountWithFee) / (reserveIn * amountWithFee);
+        amountOut = (reserveOut * amountInWithFee) / (reserveIn + amountInWithFee);
 
+        //To check if there is enough output
+        require(amountOut > 0, "insufficient output amount");
+        require(amountOut < reserveOut, "output amount exceeds reserve");
+
+        // Transfer output tokens to user
         tokenOut.transfer(msg.sender, amountOut);
+        
+
+        //update the reserves according the current balances
         _update(
             token0.balanceOf(address(this)),
             token1.balanceOf(address(this))

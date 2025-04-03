@@ -238,15 +238,45 @@ describe("Liquidity Pool", function () {
       const { liquidityPool, token0, token1, owner, otherAccount } = await loadFixture(
         deployLiquidityPoolFixture
       );
-
+    
+      // Primeiro, configuramos a pool de liquidez com alguns tokens
       const amount0 = hre.ethers.parseEther("100");
       const amount1 = hre.ethers.parseEther("80");
-  
+    
       await token0.approve(await liquidityPool.getAddress(), amount0);
       await token1.approve(await liquidityPool.getAddress(), amount1);
-
       await liquidityPool.deposit(amount0, amount1);
-
+    
+      // Obtém saldos iniciais antes da troca
+      const initialToken0Balance = await token0.balanceOf(owner.address);
+      const initialToken1Balance = await token1.balanceOf(owner.address);
+      const initialReserve0 = await liquidityPool.reserve0();
+      const initialReserve1 = await liquidityPool.reserve1();
+    
+      // Prepara para trocar token0 por token1
+      const swapAmount = hre.ethers.parseEther("10");
+      await token0.approve(await liquidityPool.getAddress(), swapAmount);
+    
+      // Executa o swap
+      await liquidityPool.swap(await token0.getAddress(), swapAmount);
+    
+      // Verifica os novos saldos após a troca
+      const finalToken0Balance = await token0.balanceOf(owner.address);
+      const finalToken1Balance = await token1.balanceOf(owner.address);
+      const finalReserve0 = await liquidityPool.reserve0();
+      const finalReserve1 = await liquidityPool.reserve1();
+    
+      // Verifica que os tokens foram trocados corretamente
+      expect(finalToken0Balance).to.be.lt(initialToken0Balance); // Menos token0
+      expect(finalToken1Balance).to.be.gt(initialToken1Balance); // Mais token1
+      
+      // Verifica que as reservas foram atualizadas
+      expect(finalReserve0).to.be.gt(initialReserve0); // Mais token0 na reserva
+      expect(finalReserve1).to.be.lt(initialReserve1); // Menos token1 na reserva
+    
+      // Verificação adicional para garantir que o fee foi aplicado corretamente
+      const amountWithFee = (swapAmount * BigInt(10000 - 30)) / BigInt(10000); // 0.3% fee
+      expect(finalReserve0 - initialReserve0).to.equal(swapAmount);
     });
   });
 });
