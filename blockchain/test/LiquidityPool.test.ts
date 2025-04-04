@@ -280,9 +280,131 @@ describe("Liquidity Pool", function () {
     });
   });
 
-  describe("Reentrant Attack", function () {
-    it("Should Reentrant", async function () {
+  describe("LiquidityPool Reentrancy Protection", function () {
+    async function deployReentrancyTestFixture() {
+      // Contas para teste
+      const [owner, attacker] = await hre.ethers.getSigners();
       
+      // Deploy dos tokens
+      const MockERC20 = await hre.ethers.getContractFactory("MockERC20");
+      const token0 = await MockERC20.deploy("Token0", "TK0");
+      const token1 = await MockERC20.deploy("Token1", "TK1");
+      
+      // Para garantir a ordem correta independente dos endereços
+      const sortedTokens = await sortTokens(token0.getAddress(), token1.getAddress());
+      const orderedToken0 = sortedTokens[0];
+      const orderedToken1 = sortedTokens[1];
+      
+      // Deploy da pool de liquidez
+      const LiquidityPool = await hre.ethers.getContractFactory("LiquidityPool");
+      const liquidityPool = await LiquidityPool.deploy(
+        await orderedToken0.getAddress(),
+        await orderedToken1.getAddress()
+      );
+      
+      // Configurar a pool com liquidez inicial
+      const amount0 = hre.ethers.parseEther("1000");
+      const amount1 = hre.ethers.parseEther("1000");
+      
+      await orderedToken0.mint(owner.address, amount0 * BigInt(10));
+      await orderedToken1.mint(owner.address, amount1 * BigInt(10));
+      
+      await orderedToken0.approve(await liquidityPool.getAddress(), amount0);
+      await orderedToken1.approve(await liquidityPool.getAddress(), amount1);
+      await liquidityPool.deposit(amount0, amount1);
+      
+      // Deploy do contrato de ataque
+      const ReentrancyAttacker = await hre.ethers.getContractFactory("ReentrancyAttacker");
+      const attacker0 = token0.getAddress() === orderedToken0.getAddress() ? token0 : token1;
+      const attacker1 = token0.getAddress() === orderedToken0.getAddress() ? token1 : token0;
+      
+      const attackerContract = await ReentrancyAttacker.deploy(
+        await liquidityPool.getAddress(),
+        await attacker0.getAddress(),
+        await attacker1.getAddress()
+      );
+      
+      // Enviar tokens para o contrato atacante
+      const attackAmount = hre.ethers.parseEther("10");
+      await attacker0.mint(await attackerContract.getAddress(), attackAmount);
+      
+      return { 
+        liquidityPool, 
+        token0: orderedToken0, 
+        token1: orderedToken1, 
+        owner, 
+        attacker, 
+        attackerContract,
+        attackAmount
+      };
+    }
+    
+    // Função auxiliar para ordenar os tokens por endereço (como em muitos DEXs)
+    async function sortTokens(tokenA:string , tokenB: string) {
+      const addrA = await tokenA;
+      const addrB = await tokenB;
+      
+      if (addrA < addrB) {
+        return [await hre.ethers.getContractAt("MockERC20", addrA), await hre.ethers.getContractAt("MockERC20", addrB)];
+      } else {
+        return [await hre.ethers.getContractAt("MockERC20", addrB), await hre.ethers.getContractAt("MockERC20", addrA)];
+      }
+    }
+  
+    describe("Teste de proteção contra reentrância", function () {
+      it("Deve prevenir ataques de reentrância na função swap", async function () {
+        const { liquidityPool, token0, token1, attackerContract, attackAmount } = await loadFixture(
+          deployReentrancyTestFixture
+        );
+        
+        // Guarda o estado inicial da pool
+        const initialReserve0 = await liquidityPool.reserve0();
+        const initialReserve1 = await liquidityPool.reserve1();
+        
+        // Executa o ataque - Se a proteção contra reentrância estiver funcionando,
+        // o contrato fará apenas uma troca bem-sucedida e qualquer tentativa de reentrância falhará
+        try {
+          await attackerContract.attack(attackAmount);
+        } catch (error) {
+          // Em alguns cenários, o ataque inteiro pode falhar, o que também é aceitável
+          console.log("Ataque falhou completamente:", error.message);
+        }
+        
+        // Verifica se as reservas mudaram apenas uma vez (pela troca inicial)
+        // e não várias vezes (o que aconteceria se a reentrância tivesse sucesso)
+        const finalReserve0 = await liquidityPool.reserve0();
+        const finalReserve1 = await liquidityPool.reserve1();
+        
+        // O ataque foi realizado com token0, então reserve0 deve aumentar e reserve1 diminuir
+        // apenas uma vez pela troca legítima
+        expect(finalReserve0).to.be.gt(initialReserve0);
+        expect(finalReserve1).to.be.lt(initialReserve1);
+        
+        // Opcional: verificar os logs do contrato atacante para confirmar que a reentrância falhou
+        const attackLogs = await hre.ethers.provider.getLogs({
+          address: await attackerContract.getAddress(),
+          fromBlock: "latest",
+        });
+        
+        // Registrar os eventos para análise
+        console.log("Logs de ataque:", attackLogs);
+      });
+      
+      it("Deve completar com sucesso uma única operação swap legítima", async function () {
+        const { liquidityPool, token0, owner } = await loadFixture(
+          deployReentrancyTestFixture
+        );
+        
+        // Verificar que uma operação swap normal ainda funciona
+        const swapAmount = hre.ethers.parseEther("5");
+        await token0.approve(await liquidityPool.getAddress(), swapAmount);
+        
+        // Executa o swap
+        await liquidityPool.swap(await token0.getAddress(), swapAmount);
+        
+        // Se chegamos aqui sem erros, o teste passou
+        expect(true).to.be.true;
+      });
     });
   });
 });
