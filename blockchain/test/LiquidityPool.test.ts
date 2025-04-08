@@ -290,8 +290,11 @@ describe("Liquidity Pool", function () {
       const token0 = await MockERC20.deploy("Token0", "TK0");
       const token1 = await MockERC20.deploy("Token1", "TK1");
       
+      const token0Address = await token0.getAddress();
+  const token1Address = await token1.getAddress();
+  
       // Para garantir a ordem correta independente dos endereços
-      const sortedTokens = await sortTokens(token0.getAddress(), token1.getAddress());
+      const sortedTokens = await sortTokens(token0Address, token1Address);
       const orderedToken0 = sortedTokens[0];
       const orderedToken1 = sortedTokens[1];
       
@@ -365,7 +368,7 @@ describe("Liquidity Pool", function () {
         // o contrato fará apenas uma troca bem-sucedida e qualquer tentativa de reentrância falhará
         try {
           await attackerContract.attack(attackAmount);
-        } catch (error) {
+        } catch (error: any) {
           // Em alguns cenários, o ataque inteiro pode falhar, o que também é aceitável
           console.log("Ataque falhou completamente:", error.message);
         }
