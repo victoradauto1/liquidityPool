@@ -48,7 +48,7 @@ contract ReentrancyAttacker {
             // Attempt reentrancy - call swap again before the first call finishes
             try liquidityPool.swap(address(token0), attackAmount) {
                 emit AttackLog("Reentrancy successful!", attackAmount);
-            } catch Error(string memory reason) {
+            } catch Error(string memory) {
                 emit AttackLog("Reentrancy failed", 0);
             }
         }
@@ -56,14 +56,14 @@ contract ReentrancyAttacker {
     
     // Function to simulate an ERC777-like token with hooks
     // that can potentially call back the swap function
-    function tokenFallback(address from, uint256 value) external {
+    function tokenFallback(address, uint256 value) external {
         if (attacking && msg.sender == address(token1)) {
             emit AttackLog("tokenFallback called during attack", value);
             
             // Attempt reentrancy
             try liquidityPool.swap(address(token0), attackAmount) {
                 emit AttackLog("Reentrancy via tokenFallback successful!", attackAmount);
-            } catch Error(string memory reason) {
+            } catch Error(string memory) {
                 emit AttackLog("Reentrancy via tokenFallback failed", 0);
             }
         }
