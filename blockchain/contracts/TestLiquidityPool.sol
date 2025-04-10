@@ -5,9 +5,11 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "./ILiquidityPool.sol";
+import "hardhat/console.sol";
 
 // , ERC20Burnable, Ownable,
-contract LiquidityPool is ERC20, ReentrancyGuard {
+contract TestLiquidityPool is ILiquidityPool, ERC20, ReentrancyGuard{
     IERC20 public token0;
     IERC20 public token1;
 
@@ -36,14 +38,23 @@ contract LiquidityPool is ERC20, ReentrancyGuard {
                 x = (y / x + x) / 2;
             }
         } else if (y != 0) {
+            console.log("Entrou no bloco else if, y =", y);
             z = 1;
-        } else{
-            return 0;
+        } else {
+            return 0; 
         }
+    }
+
+    function sqrtOut(uint y) external pure returns (uint z){
+        return sqrt(y);
     }
 
     function _min(uint x, uint y) internal pure returns (uint) {
         return x >= y ? x : y;
+    }
+
+    function _minOut(uint x, uint y) external pure returns (uint) {
+        return _min(x, y);
     }
 
     function deposit(
