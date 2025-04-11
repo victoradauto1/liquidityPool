@@ -278,6 +278,110 @@ describe("Liquidity Pool", function () {
       const amountWithFee = (swapAmount * BigInt(10000 - 30)) / BigInt(10000); // 0.3% fee
       expect(finalReserve0 - initialReserve0).to.equal(swapAmount);
     });
+    it("Should revert with invalid token", async function () {
+      const { liquidityPool, token0, token1, owner } = await loadFixture(deployLiquidityPoolFixture);
+      
+      // Configurar a pool com liquidez
+      const amount0 = hre.ethers.parseEther("100");
+      const amount1 = hre.ethers.parseEther("100");
+      
+      await token0.approve(await liquidityPool.getAddress(), amount0);
+      await token1.approve(await liquidityPool.getAddress(), amount1);
+      await liquidityPool.deposit(amount0, amount1);
+      
+      // Tentar trocar com um endereço de token inválido
+      const invalidTokenAddress = owner.address; // Qualquer endereço que não seja token0 ou token1
+      await expect(
+        liquidityPool.swap(invalidTokenAddress, hre.ethers.parseEther("10"))
+      ).to.be.revertedWith("invalid token");
+    });
+    
+    it("Should revert with invalid amount", async function () {
+      const { liquidityPool, token0, token1 } = await loadFixture(deployLiquidityPoolFixture);
+      
+      // Configurar a pool com liquidez
+      const amount0 = hre.ethers.parseEther("100");
+      const amount1 = hre.ethers.parseEther("100");
+      
+      await token0.approve(await liquidityPool.getAddress(), amount0);
+      await token1.approve(await liquidityPool.getAddress(), amount1);
+      await liquidityPool.deposit(amount0, amount1);
+      
+      // Tentar trocar com amount = 0
+      await expect(
+        liquidityPool.swap(await token0.getAddress(), 0)
+      ).to.be.revertedWith("invalid Amount");
+    });
+    
+    it("Should swap token1 for token0 (testing else branch)", async function () {
+      const { liquidityPool, token0, token1, owner } = await loadFixture(deployLiquidityPoolFixture);
+      
+      // Configurar a pool com liquidez
+      const amount0 = hre.ethers.parseEther("100");
+      const amount1 = hre.ethers.parseEther("100");
+      
+      await token0.approve(await liquidityPool.getAddress(), amount0);
+      await token1.approve(await liquidityPool.getAddress(), amount1);
+      await liquidityPool.deposit(amount0, amount1);
+      
+      // Saldos iniciais
+      const initialToken0Balance = await token0.balanceOf(owner.address);
+      const initialToken1Balance = await token1.balanceOf(owner.address);
+      
+      // Trocar token1 por token0 (testando o ramo else)
+      const swapAmount = hre.ethers.parseEther("10");
+      await token1.approve(await liquidityPool.getAddress(), swapAmount);
+      
+      // Executar o swap
+      await liquidityPool.swap(await token1.getAddress(), swapAmount);
+      
+      // Verificar que tokens foram trocados corretamente
+      const finalToken0Balance = await token0.balanceOf(owner.address);
+      const finalToken1Balance = await token1.balanceOf(owner.address);
+      
+      expect(finalToken0Balance).to.be.gt(initialToken0Balance); // Mais token0
+      expect(finalToken1Balance).to.be.lt(initialToken1Balance); // Menos token1
+    });
+    
+    it("Should revert with insufficient output amount", async function () {
+      const { liquidityPool, token0, token1 } = await loadFixture(deployLiquidityPoolFixture);
+      
+      // Configurar a pool com liquidez extremamente pequena
+      const amount0 = 1n;
+      const amount1 = 1n;
+      
+      await token0.approve(await liquidityPool.getAddress(), amount0);
+      await token1.approve(await liquidityPool.getAddress(), amount1);
+      await liquidityPool.deposit(amount0, amount1);
+      
+      // Tentar trocar com uma quantidade que resultaria em output = 0
+      // Se a liquidez for extremamente pequena, qualquer troca com fee pode resultar em 0
+      await token0.approve(await liquidityPool.getAddress(), 1);
+      await expect(
+        liquidityPool.swap(await token0.getAddress(), 1)
+      ).to.be.revertedWith("insufficient output amount");
+    });
+    
+    it("Should revert when output amount exceeds reserve", async function () {
+      const { liquidityPool, token0, token1 } = await loadFixture(deployLiquidityPoolFixture);
+      
+      // Configurar a pool com liquidez extremamente desbalanceada
+      const amount0 = hre.ethers.parseEther("10"); 
+      const amount1 = hre.ethers.parseEther("10"); 
+      
+      await token0.approve(await liquidityPool.getAddress(), amount0);
+      await token1.approve(await liquidityPool.getAddress(), amount1);
+      await liquidityPool.deposit(amount0, amount1);
+      
+      // Quantidade extremamente grande para swap
+      const swapAmount = hre.ethers.parseEther("10000000"); 
+      await token0.approve(await liquidityPool.getAddress(), swapAmount);
+      
+      // Apenas verifica se houve revert, sem especificar a mensagem
+      await expect(
+        liquidityPool.swap(await token0.getAddress(), swapAmount)
+      ).to.be.reverted;
+    });
   });
 
   describe("LiquidityPool Reentrancy Protection", function () {
